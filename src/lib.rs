@@ -4,74 +4,64 @@
 //!
 //! To this end, this crate provides the [`generate_token`] macro, which will create a ZST which can only be constructed using [`TokenTrait::aquire`], which is generated to guarantee no other token exists before returning the token. This is done by checking a static `AtomicBool` flag, which is the only runtime cost of these tokens.
 #![no_std]
-use core::cell::UnsafeCell;
-
-/// Must be implemented by any token type and ideally its only constructor.
-///
-/// Ideally, only a single instance of the token type should be able to exist at any point in time.
-/// The easiest way to create a token is with [`generate_token`], which will create a ZST which implements [`TokenTrait`]
-pub unsafe trait TokenTrait: Sized {
-    fn aquire() -> Option<Self>;
+use core::{cell::UnsafeCell, convert::Infallible};
+#[cfg(not(features = "no_std"))]
+mod std {
+    use crate::IdMismatch;
+    extern crate std;
+    impl std::error::Error for IdMismatch {}
 }
-
-/// Generates any number of token types for use with token cells.
-///
-/// These token types use a static [`AtomicBool`](std::sync::atomic::AtomicBool) to ensure unicity at any time. You may loop over aquire to obtain a spin lock, but you probably should put the token in a mutex instead.
-///
-/// You may generate multiple token types at once: `generate_token!(T1, pub T2)`
-#[macro_export]
-macro_rules! generate_token {
-    ($vis: vis $id: ident) => {
-        /// An auto-generated token type, initialize it with [`TokenTrait::aquire`]
-        #[allow(dead_code)]
-        $vis struct $id {
-            do_not_initialize_manually__use_TokenTrait_aquire_instead__otherwise_I_cannot_guarantee_your_safety__so_I_am_making_this_as_obnoxious_as_possible_to_dissuade_you: (),
-        }
-        #[allow(non_upper_case_globals)]
-        static $id: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-        unsafe impl token_cell::TokenTrait for $id {
-            fn aquire() -> Option<Self> {
-                if $id.swap(true, std::sync::atomic::Ordering::Relaxed) {
-                    None
-                } else {
-                    Some($id { do_not_initialize_manually__use_TokenTrait_aquire_instead__otherwise_I_cannot_guarantee_your_safety__so_I_am_making_this_as_obnoxious_as_possible_to_dissuade_you: () })
-                }
-            }
-        }
-        impl Drop for $id {
-            fn drop(&mut self) {
-                $id.store(false, std::sync::atomic::Ordering::Relaxed);
-            }
-        }
-    };
-    ($($vis:vis $id: ident),+) => {
-        $(generate_token!($vis $id);)*
-    };
-}
+pub mod support;
+pub use support::{IdMismatch, RuntimeToken, TokenChecker, TokenTrait};
 
 /// A cell which requires a token for interior read/write access.
-#[repr(transparent)]
-pub struct TokenCell<Token: TokenTrait, T: ?Sized> {
-    _marker: core::marker::PhantomData<Token>,
+#[repr(C)]
+pub struct TokenCell<Token: TokenTrait, T> {
     inner: UnsafeCell<T>,
+    checker: Token::Checker,
 }
-
-impl<Token: TokenTrait, T> TokenCell<Token, T> {
-    /// Typically used to build a [`TokenCell`] when no token is immediately available, this will typically require type disambiguation.
+impl<Token: TokenTrait, T> TokenCell<Token, T>
+where
+    Token::Checker: TokenChecker<Token, Error = Infallible>,
+{
     #[inline(always)]
-    pub fn new(value: T) -> Self {
+    /// Borrows the cell's content.
+    pub fn borrow<'l>(&'l self, _: &'l Token) -> &'l T {
+        unsafe { &*self.inner.get() }
+    }
+    #[inline(always)]
+    /// Borrows the cell's content mutably.
+    pub fn borrow_mut<'l>(&'l self, _: &'l mut Token) -> &'l mut T {
+        unsafe { &mut *self.inner.get() }
+    }
+    #[inline(always)]
+    /// Places `value` inside the cell, returning the
+    pub fn swap(&self, mut value: T, token: &mut Token) -> T {
+        core::mem::swap(self.borrow_mut(token), &mut value);
+        value
+    }
+}
+impl<Token: TokenTrait, T> TokenCell<Token, T> {
+    /// Builds a [`TokenCell`] attached to a `token`
+    #[inline(always)]
+    pub fn new(value: T) -> Self
+    where
+        Token::Checker: TokenChecker<Token, Input = ()>,
+    {
         TokenCell {
-            _marker: core::default::Default::default(),
             inner: UnsafeCell::new(value),
+            checker: TokenChecker::new(()),
         }
     }
-    /// For convenience, when a reference to the token is available, you may use this method instead of [`TokenCell::new`],
-    /// this should remove the need for you to write a turbo operator.
+    /// Builds a [`TokenCell`] attached to a `token`
     #[inline(always)]
-    pub fn with_token(value: T, _token: &Token) -> Self {
+    pub fn with_token(token: &Token, value: T) -> Self
+    where
+        Token::Checker: TokenChecker<Token>,
+    {
         TokenCell {
-            _marker: core::default::Default::default(),
             inner: UnsafeCell::new(value),
+            checker: TokenChecker::from_ref(token),
         }
     }
     #[inline(always)]
@@ -79,60 +69,53 @@ impl<Token: TokenTrait, T> TokenCell<Token, T> {
         self.inner.into_inner()
     }
     #[inline(always)]
-    pub fn swap(&self, mut value: T, token: &mut Token) -> T {
-        core::mem::swap(self.borrow_mut(token), &mut value);
-        value
+    /// Fallible equivalent of [`TokenCell::swap`], for runtime-checked tokens.
+    ///
+    /// Since token mismatch is indicative that the wrong token was used to interact with the cell,
+    /// you should treat these as unrecoverable errors by unwrapping the result.
+    pub fn try_swap(
+        &self,
+        mut value: T,
+        token: &mut Token,
+    ) -> Result<T, <Token::Checker as TokenChecker<Token>>::Error> {
+        core::mem::swap(self.try_borrow_mut(token)?, &mut value);
+        Ok(value)
     }
     #[inline(always)]
-    pub fn take(&self, token: &mut Token) -> T
-    where
-        T: Default,
-    {
-        let mut value = Default::default();
-        core::mem::swap(self.borrow_mut(token), &mut value);
-        value
-    }
-}
-impl<Token: TokenTrait, T: ?Sized> TokenCell<Token, T> {
-    #[inline(always)]
-    pub fn get_mut(&mut self) -> &mut T {
-        self.inner.get_mut()
+    /// Fallible equivalent of [`TokenCell::borrow`], for runtime-checked tokens.
+    ///
+    /// Since token mismatch is indicative that the wrong token was used to interact with the cell,
+    /// you should treat these as unrecoverable errors by unwrapping the result.
+    pub fn try_borrow<'l>(
+        &'l self,
+        token: &'l Token,
+    ) -> Result<&'l T, <Token::Checker as TokenChecker<Token>>::Error> {
+        self.checker
+            .check(token)
+            .map(|_| unsafe { &*self.inner.get() })
     }
     #[inline(always)]
-    pub fn borrow<'l>(&'l self, _: &'l Token) -> &'l T {
-        unsafe { &*self.inner.get() }
-    }
-    #[inline(always)]
-    pub fn borrow_mut<'l>(&'l self, _: &'l mut Token) -> &'l mut T {
-        unsafe { &mut *self.inner.get() }
-    }
-    pub fn from_mut(value: &mut T) -> &mut Self {
-        unsafe { core::mem::transmute(value) }
+    /// Fallible equivalent of [`TokenCell::borrow_mut`], for runtime-checked tokens.
+    ///
+    /// Since token mismatch is indicative that the wrong token was used to interact with the cell,
+    /// you should treat these as unrecoverable errors by unwrapping the result.
+    pub fn try_borrow_mut<'l>(
+        &'l self,
+        token: &'l mut Token,
+    ) -> Result<&'l mut T, <Token::Checker as TokenChecker<Token>>::Error> {
+        self.checker
+            .check(token)
+            .map(|_| unsafe { &mut *self.inner.get() })
     }
     #[inline(always)]
     pub fn as_ptr(&self) -> *mut T {
         self.inner.get()
     }
 }
-impl<Token: TokenTrait, S> TokenCell<Token, S> {
-    pub fn as_slice_of_cells<T>(&self) -> &[TokenCell<Token, T>]
-    where
-        S: AsRef<[T]>,
-    {
-        unsafe {
-            &*(<S as AsRef<[T]>>::as_ref(&*self.as_ptr()) as *const _
-                as *const [TokenCell<Token, T>])
-        }
-    }
-}
+
 impl<Token: TokenTrait, T> AsMut<T> for TokenCell<Token, T> {
     fn as_mut(&mut self) -> &mut T {
-        self.get_mut()
-    }
-}
-impl<Token: TokenTrait, T> From<T> for TokenCell<Token, T> {
-    fn from(value: T) -> Self {
-        Self::new(value)
+        self.inner.get_mut()
     }
 }
 unsafe impl<Token: TokenTrait, T: Send> Send for TokenCell<Token, T> {}

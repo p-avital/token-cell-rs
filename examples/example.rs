@@ -1,13 +1,13 @@
 use token_cell::*;
 
-generate_token!(Token, pub Token2);
+generate_static_token!(Token, pub Token2);
 fn main() {
-    let mut token = Token::aquire().unwrap();
-    let cell1: TokenCell<Token, _> = TokenCell::new(1);
+    let mut token = Token::new();
+    let cell1 = TokenCell::new(1);
     let cell2 = TokenCell::new(2);
-    let mut token2 = Token2::aquire().unwrap();
-    let mut cell3 = TokenCell::with_token(3, &token2);
-    let _cell4 = TokenCell::<Token2, _>::new(4);
+    let mut token2 = Token2::new();
+    let mut cell3 = TokenCell::new(3);
+    let _cell4: TokenCell<Token2, _> = TokenCell::new(4);
     *cell1.borrow_mut(&mut token) = 5;
     *cell2.borrow_mut(&mut token) = 6;
     let cell3_ref = &cell3;
