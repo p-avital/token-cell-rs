@@ -5,25 +5,25 @@
 use token_cell::*;
 
 #[no_mangle]
-fn infallible_borrow(cell: &TokenCell<Token, i32>, token: &mut Token) {
+fn infallible_borrow(cell: &TokenCell<i32, Token>, token: &mut Token) {
     *cell.borrow_mut(token) = 1;
 }
 #[no_mangle]
-fn infallible_try_borrow(cell: &TokenCell<Token, i32>, token: &mut Token) {
+fn infallible_try_borrow(cell: &TokenCell<i32, Token>, token: &mut Token) {
     *cell.try_borrow_mut(token).unwrap() = 1;
 }
 #[no_mangle]
-fn fallible_try_borrow(cell: &TokenCell<RuntimeToken, i32>, token: &mut RuntimeToken) {
+fn fallible_try_borrow(cell: &TokenCell<i32, RuntimeToken>, token: &mut RuntimeToken) {
     *cell.try_borrow_mut(token).unwrap() = 1;
 }
 
-generate_static_token!(Token);
+unsafe_token!(Token);
 fn main() {
-    let mut t1 = Token::new();
-    let c1 = TokenCell::new(0);
+    let mut t1 = Token::new().unwrap();
+    let c1 = TokenCell::new(0, &t1);
     infallible_borrow(&c1, &mut t1);
     infallible_try_borrow(&c1, &mut t1);
-    let mut t2 = RuntimeToken::new();
-    let c2 = TokenCell::with_token(&t2, 1);
+    let mut t2 = RuntimeToken::new().unwrap();
+    let c2 = TokenCell::new(1, &t2);
     fallible_try_borrow(&c2, &mut t2);
 }

@@ -13,4 +13,7 @@ categories = ["memory-management", "no-std"]
 
 [features]
 no_std = []
+debug = []
+default = ["debug"]
 [dependencies]
+paste = "1.0"
