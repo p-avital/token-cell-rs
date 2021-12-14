@@ -17,3 +17,5 @@ debug = []
 default = ["debug"]
 [dependencies]
 paste = "1.0"
+[dev-dependencies]
+ghost-cell = "0.2"

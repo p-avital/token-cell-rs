@@ -84,11 +84,12 @@ impl<T, Token: TokenTrait> TokenCellTrait<T, Token> for TokenCell<T, Token> {
     }
 }
 
-pub struct GhostToken<'brand>(core::marker::PhantomData<&'brand ()>);
+type InvariantLifetime<'brand> = core::marker::PhantomData<fn(&'brand ()) -> &'brand ()>;
+pub struct GhostToken<'brand>(InvariantLifetime<'brand>);
 impl<'brand> TokenTrait for GhostToken<'brand> {
     type ConstructionError = ();
     type RunError = Infallible;
-    type Identifier = ();
+    type Identifier = InvariantLifetime<'brand>;
     type ComparisonError = Infallible;
     fn new() -> Result<Self, Self::ConstructionError> {
         Err(())
@@ -98,7 +99,9 @@ impl<'brand> TokenTrait for GhostToken<'brand> {
         Ok(())
     }
 
-    fn identifier(&self) -> Self::Identifier {}
+    fn identifier(&self) -> Self::Identifier {
+        self.0
+    }
 
     fn compare(&self, _: &Self::Identifier) -> Result<(), Self::ComparisonError> {
         Ok(())
