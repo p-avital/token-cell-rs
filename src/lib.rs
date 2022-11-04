@@ -21,13 +21,15 @@ pub trait TokenTrait: Sized {
     type Identifier;
     type ComparisonError;
     fn new() -> Result<Self, Self::ConstructionError>;
-    fn with_token<F: FnOnce(Self)>(f: F) -> Result<(), Self::RunError>;
+    fn with_token<R, F: FnOnce(Self) -> R>(f: F) -> Result<R, Self::RunError>;
     fn identifier(&self) -> Self::Identifier;
     fn compare(&self, id: &Self::Identifier) -> Result<(), Self::ComparisonError>;
 }
 
-pub trait TokenCellTrait<T, Token: TokenTrait> {
-    fn new(inner: T, token: &Token) -> Self;
+pub trait TokenCellTrait<T: ?Sized, Token: TokenTrait> {
+    fn new(inner: T, token: &Token) -> Self
+    where
+        T: Sized;
     fn try_borrow<'l>(&'l self, token: &'l Token) -> Result<&'l T, Token::ComparisonError>;
     fn try_borrow_mut<'l>(
         &'l self,
@@ -47,21 +49,26 @@ pub trait TokenCellTrait<T, Token: TokenTrait> {
     }
 }
 
-pub struct TokenCell<T, Token: TokenTrait> {
-    inner: UnsafeCell<T>,
+pub struct TokenCell<T: ?Sized, Token: TokenTrait> {
     token_id: Token::Identifier,
+    inner: UnsafeCell<T>,
 }
-impl<T, Token: TokenTrait> TokenCell<T, Token> {
+impl<T: ?Sized, Token: TokenTrait> TokenCell<T, Token> {
     pub fn get_mut(&mut self) -> &mut T {
         self.inner.get_mut()
     }
+}
+impl<T: Sized, Token: TokenTrait> TokenCell<T, Token> {
     pub fn into_inner(self) -> T {
         self.inner.into_inner()
     }
 }
 
-impl<T, Token: TokenTrait> TokenCellTrait<T, Token> for TokenCell<T, Token> {
-    fn new(inner: T, token: &Token) -> Self {
+impl<T: ?Sized, Token: TokenTrait> TokenCellTrait<T, Token> for TokenCell<T, Token> {
+    fn new(inner: T, token: &Token) -> Self
+    where
+        T: Sized,
+    {
         TokenCell {
             inner: UnsafeCell::new(inner),
             token_id: token.identifier(),
@@ -84,7 +91,21 @@ impl<T, Token: TokenTrait> TokenCellTrait<T, Token> for TokenCell<T, Token> {
     }
 }
 
-type InvariantLifetime<'brand> = core::marker::PhantomData<fn(&'brand ()) -> &'brand ()>;
+#[derive(Clone, Copy)]
+pub struct InvariantLifetime<'a>(core::marker::PhantomData<UnsafeCell<&'a ()>>);
+impl<'a> InvariantLifetime<'a> {
+    const fn new() -> Self {
+        Self(core::marker::PhantomData)
+    }
+}
+
+/// WARNING: This attempt at recreating GhostCell but with traits does NOT work.
+///
+/// I am leaving this here because I believe there may exist a way to make this type of
+/// token work, and anyone who has ideas of how to do so is welcome to try and make a PR.
+///
+/// To check your theory, clone this repo and use the `ghost.rs` example as a check for
+/// your attempt. If your method works, the example should have some compile error.
 pub struct GhostToken<'brand>(InvariantLifetime<'brand>);
 impl<'brand> TokenTrait for GhostToken<'brand> {
     type ConstructionError = ();
@@ -94,16 +115,15 @@ impl<'brand> TokenTrait for GhostToken<'brand> {
     fn new() -> Result<Self, Self::ConstructionError> {
         Err(())
     }
-    fn with_token<F: FnOnce(Self)>(f: F) -> Result<(), Self::RunError> {
-        f(GhostToken(Default::default()));
-        Ok(())
+    fn with_token<R, F: FnOnce(Self) -> R>(f: F) -> Result<R, Self::RunError> {
+        Ok(f(Self(InvariantLifetime::new())))
     }
 
-    fn identifier(&self) -> Self::Identifier {
+    fn identifier(&self) -> InvariantLifetime<'brand> {
         self.0
     }
 
-    fn compare(&self, _: &Self::Identifier) -> Result<(), Self::ComparisonError> {
+    fn compare(&self, _: &InvariantLifetime<'brand>) -> Result<(), Self::ComparisonError> {
         Ok(())
     }
 }
@@ -122,13 +142,13 @@ macro_rules! runtime_token {
                     type ConstructionError = Infallible;
                     type RunError = Infallible;
                     type Identifier = usize;
-                    type ComparisonError = crate::IdMismatch;
+                    type ComparisonError = $crate::IdMismatch;
                     fn new() -> Result<Self, Self::ConstructionError> {
                         Ok($id(
                             COUNTER.fetch_add(1, core::sync::atomic::Ordering::Relaxed),
                         ))
                     }
-                    fn with_token<F: FnOnce(Self)>(f: F) -> Result<(), Self::RunError> {
+                    fn with_token<R, F: FnOnce(Self)->R>(f: F) -> Result<R, Self::RunError> {
                         Self::new().map(f)
                     }
                     fn identifier(&self) -> Self::Identifier {
@@ -138,7 +158,7 @@ macro_rules! runtime_token {
                         if self.0 == *id {
                             Ok(())
                         } else {
-                            Err(crate::IdMismatch {
+                            Err($crate::IdMismatch {
                                 cell: *id,
                                 token: self.0,
                             })
@@ -176,7 +196,7 @@ macro_rules! singleton_token {
                             Err(SingletonUnavailable)
                         }
                     }
-                    fn with_token<F: FnOnce(Self)>(f: F) -> Result<(), Self::RunError> {
+                    fn with_token<R, F: FnOnce(Self)->R>(f: F) -> Result<R, Self::RunError> {
                         Self::new().map(f)
                     }
                     fn identifier(&self) -> Self::Identifier {
@@ -211,7 +231,7 @@ macro_rules! unsafe_token {
                     fn new() -> Result<Self, Self::ConstructionError> {
                         Ok($id(()))
                     }
-                    fn with_token<F: FnOnce(Self)>(f: F) -> Result<(), Self::RunError> {
+                    fn with_token<R, F: FnOnce(Self)->R>(f: F) -> Result<R, Self::RunError> {
                         Self::new().map(f)
                     }
                     fn identifier(&self) -> Self::Identifier {
