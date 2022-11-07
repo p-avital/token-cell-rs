@@ -15,5 +15,5 @@ fn main() {
     let cell3_mutref = &mut cell3;
     *cell3_mutref.get_mut() = 8;
     let borrow = cell3.borrow(&token2);
-    println!("{}", borrow);
+    println!("{}", *borrow);
 }

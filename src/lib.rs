@@ -4,7 +4,7 @@
 //!
 //! To this end, this crate provides the [`generate_token`] macro, which will create a ZST which can only be constructed using [`TokenTrait::aquire`], which is generated to guarantee no other token exists before returning the token. This is done by checking a static `AtomicBool` flag, which is the only runtime cost of these tokens.
 #![no_std]
-use core::{cell::UnsafeCell, convert::Infallible};
+use core::{cell::UnsafeCell, convert::Infallible, ops::Deref};
 pub use paste::paste;
 #[cfg(not(features = "no_std"))]
 mod std {
@@ -30,22 +30,65 @@ pub trait TokenCellTrait<T: ?Sized, Token: TokenTrait> {
     fn new(inner: T, token: &Token) -> Self
     where
         T: Sized;
-    fn try_borrow<'l>(&'l self, token: &'l Token) -> Result<&'l T, Token::ComparisonError>;
+    fn try_borrow<'l>(
+        &'l self,
+        token: &'l Token,
+    ) -> Result<TokenGuard<'l, T, Token>, Token::ComparisonError>;
     fn try_borrow_mut<'l>(
         &'l self,
         token: &'l mut Token,
-    ) -> Result<&'l mut T, Token::ComparisonError>;
-    fn borrow<'l>(&'l self, token: &'l Token) -> &'l T
+    ) -> Result<TokenGuardMut<'l, T, Token>, Token::ComparisonError>;
+    fn borrow<'l>(&'l self, token: &'l Token) -> TokenGuard<'l, T, Token>
     where
         Token::ComparisonError: core::fmt::Debug,
     {
         self.try_borrow(token).unwrap()
     }
-    fn borrow_mut<'l>(&'l self, token: &'l mut Token) -> &'l mut T
+    fn borrow_mut<'l>(&'l self, token: &'l mut Token) -> TokenGuardMut<'l, T, Token>
     where
         Token::ComparisonError: core::fmt::Debug,
     {
         self.try_borrow_mut(token).unwrap()
+    }
+}
+
+pub struct TokenGuard<'a, T: ?Sized, Token: TokenTrait> {
+    cell: &'a TokenCell<T, Token>,
+    token: &'a Token,
+}
+impl<'a, T: ?Sized, Token: TokenTrait> TokenGuard<'a, T, Token> {
+    pub fn token(&'a self) -> &'a Token {
+        self.token
+    }
+}
+impl<'a, T: ?Sized, Token: TokenTrait> Deref for TokenGuard<'a, T, Token> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.cell.inner.get().cast_const() }
+    }
+}
+
+pub struct TokenGuardMut<'a, T: ?Sized, Token: TokenTrait> {
+    cell: &'a TokenCell<T, Token>,
+    token: &'a mut Token,
+}
+impl<'a, T: ?Sized, Token: TokenTrait> TokenGuardMut<'a, T, Token> {
+    pub fn token(&'a self) -> &'a Token {
+        self.token
+    }
+    pub fn token_mut(&'a mut self) -> &'a mut Token {
+        self.token
+    }
+}
+impl<'a, T: ?Sized, Token: TokenTrait> Deref for TokenGuardMut<'a, T, Token> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.cell.inner.get().cast_const() }
+    }
+}
+impl<'a, T, Token: TokenTrait> core::ops::DerefMut for TokenGuardMut<'a, T, Token> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.cell.inner.get() }
     }
 }
 
@@ -75,19 +118,22 @@ impl<T: ?Sized, Token: TokenTrait> TokenCellTrait<T, Token> for TokenCell<T, Tok
         }
     }
 
-    fn try_borrow<'l>(&'l self, token: &'l Token) -> Result<&'l T, Token::ComparisonError> {
+    fn try_borrow<'l>(
+        &'l self,
+        token: &'l Token,
+    ) -> Result<TokenGuard<'l, T, Token>, Token::ComparisonError> {
         token
             .compare(&self.token_id)
-            .map(|_| unsafe { &*self.inner.get() })
+            .map(move |_| TokenGuard { cell: self, token })
     }
 
     fn try_borrow_mut<'l>(
         &'l self,
         token: &'l mut Token,
-    ) -> Result<&'l mut T, Token::ComparisonError> {
+    ) -> Result<TokenGuardMut<'l, T, Token>, Token::ComparisonError> {
         token
             .compare(&self.token_id)
-            .map(|_| unsafe { &mut *self.inner.get() })
+            .map(move |_| TokenGuardMut { cell: self, token })
     }
 }
 
