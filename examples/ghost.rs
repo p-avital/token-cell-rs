@@ -1,5 +1,5 @@
 use ghost_cell::{GhostCell as GC, GhostToken as GT};
-use token_cell::*;
+use token_cell::{ghost::*, prelude::*};
 
 fn main() {
     GhostToken::with_token(|mut t1| {

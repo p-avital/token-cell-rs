@@ -2,7 +2,7 @@
 //! we find that in release mode, `infallible_borrow` and `infallible_try_borrow` are equivalent.
 //! However, in debug mode, the ASM instructions for panicking are still present.
 
-use token_cell::*;
+use token_cell::{prelude::*, RuntimeToken};
 
 #[no_mangle]
 fn infallible_borrow(cell: &TokenCell<i32, Token>, token: &mut Token) {
@@ -17,7 +17,7 @@ fn fallible_try_borrow(cell: &TokenCell<i32, RuntimeToken>, token: &mut RuntimeT
     *cell.try_borrow_mut(token).unwrap() = 1;
 }
 
-unsafe_token!(Token);
+token_cell::unsafe_token!(Token);
 fn main() {
     let mut t1 = Token::new().unwrap();
     let c1 = TokenCell::new(0, &t1);
