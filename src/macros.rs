@@ -5,13 +5,13 @@ macro_rules! runtime_token {
         $vis use [<__ $id _mod__ >]::$id;
         #[allow(nonstandard_style)]
         mod [<__ $id _mod__ >] {
-            use core::{convert::Infallible, sync::atomic::AtomicUsize};
-            static COUNTER: AtomicUsize = AtomicUsize::new(0);
-            pub struct $id(usize);
+            use core::{convert::Infallible, sync::atomic::AtomicU16};
+            static COUNTER: AtomicU16 = AtomicU16::new(0);
+            pub struct $id(u16);
             impl $crate::core::TokenTrait for $id {
                 type ConstructionError = Infallible;
                 type RunError = Infallible;
-                type Identifier = usize;
+                type Identifier = u16;
                 type ComparisonError = $crate::macros::IdMismatch;
                 fn new() -> Result<Self, Self::ConstructionError> {
                     Ok($id(
@@ -135,8 +135,8 @@ mod token {
 
 #[derive(Debug, Clone, Copy)]
 pub struct IdMismatch {
-    pub cell: usize,
-    pub token: usize,
+    pub cell: u16,
+    pub token: u16,
 }
 impl ::core::fmt::Display for IdMismatch {
     fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
