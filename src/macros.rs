@@ -76,6 +76,11 @@ macro_rules! singleton_token {
                     Ok(())
                 }
             }
+            impl ::core::ops::Drop for $id {
+                fn drop(&mut self) {
+                    AVAILABLE.store(true, core::sync::atomic::Ordering::Relaxed);
+                }
+            }
         }
     }
 };

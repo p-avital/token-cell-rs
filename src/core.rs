@@ -10,36 +10,62 @@ pub trait TokenTrait: Sized {
     type RunError;
     type Identifier;
     type ComparisonError;
+    /// Constructs a new Token.
     fn new() -> Result<Self, Self::ConstructionError>;
+    /// Constructs a new Token, and provides it to the closure.
+    ///
+    /// While this should allow to provide a traitified version of `ghost-cell`, it seems the compiler only detects
+    /// the lifetime invariance with inherent methods.
     fn with_token<R, F: FnOnce(Self) -> R>(f: F) -> Result<R, Self::RunError>;
+    /// Returns the Token's identifier, which cells may store to allow comparison.
     fn identifier(&self) -> Self::Identifier;
+    /// Allows the cell to compare its identifier to the Token.
     fn compare(&self, id: &Self::Identifier) -> Result<(), Self::ComparisonError>;
 }
 
 pub trait TokenCellTrait<T: ?Sized, Token: TokenTrait>: Sync {
+    /// Constructs a new cell using `token` as its key.
     fn new(inner: T, token: &Token) -> Self
     where
         T: Sized;
-    fn try_borrow<'l>(
+    /// Attempts to construct a guard which [`Deref`]s to the inner data,
+    /// but also allows recovering the `Token`.
+    fn try_guard<'l>(
         &'l self,
         token: &'l Token,
     ) -> Result<TokenGuard<'l, T, Token>, Token::ComparisonError>;
-    fn try_borrow_mut<'l>(
+    /// Attempts to borrow the inner data.
+    ///
+    /// This only fails if the wrong token was used as a key, provided that `Token` has a runtime comparison.
+    fn try_borrow<'l>(&'l self, token: &'l Token) -> Result<&'l T, Token::ComparisonError>;
+    /// Attempts to construct a guard which [`DerefMut`]s to the inner data,
+    /// but also allows recovering the `Token`.
+    fn try_guard_mut<'l>(
         &'l self,
         token: &'l mut Token,
     ) -> Result<TokenGuardMut<'l, T, Token>, Token::ComparisonError>;
-    fn borrow<'l>(&'l self, token: &'l Token) -> TokenGuard<'l, T, Token>
+    /// Attempts to borrow the inner data mutably.
+    ///
+    /// This only fails if the wrong token was used as a key, provided that `Token` has a runtime comparison.
+    fn try_borrow_mut<'l>(
+        &'l self,
+        token: &'l mut Token,
+    ) -> Result<&'l mut T, Token::ComparisonError>;
+    /// Borrows the inner data, panicking if the wrong token was used as key.
+    fn borrow<'l>(&'l self, token: &'l Token) -> &'l T
     where
         Token::ComparisonError: core::fmt::Debug,
     {
         self.try_borrow(token).unwrap()
     }
-    fn borrow_mut<'l>(&'l self, token: &'l mut Token) -> TokenGuardMut<'l, T, Token>
+    /// Borrows the inner data mutably, panicking if the wrong token was used as key.
+    fn borrow_mut<'l>(&'l self, token: &'l mut Token) -> &'l mut T
     where
         Token::ComparisonError: core::fmt::Debug,
     {
         self.try_borrow_mut(token).unwrap()
     }
+    /// Constructs a lazy computation that can then be applied using the token.
     fn map<'a, U, F: FnOnce(TokenGuard<'a, T, Token>) -> U>(
         &'a self,
         f: F,
@@ -50,6 +76,7 @@ pub trait TokenCellTrait<T: ?Sized, Token: TokenTrait>: Sync {
             marker: core::marker::PhantomData,
         }
     }
+    /// Constructs a lazy computation that can then be applied using the token.
     fn map_mut<'a, U, F: FnOnce(TokenGuardMut<'a, T, Token>) -> U>(
         &'a self,
         f: F,
@@ -74,7 +101,7 @@ impl<'a, T: ?Sized, Token: TokenTrait> TokenGuard<'a, T, Token> {
 impl<'a, T: ?Sized, Token: TokenTrait> Deref for TokenGuard<'a, T, Token> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.cell.inner.get().cast_const() }
+        unsafe { &*self.cell.inner.get() }
     }
 }
 
@@ -93,7 +120,7 @@ impl<'a, T: ?Sized, Token: TokenTrait> TokenGuardMut<'a, T, Token> {
 impl<'a, T: ?Sized, Token: TokenTrait> Deref for TokenGuardMut<'a, T, Token> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.cell.inner.get().cast_const() }
+        unsafe { &*self.cell.inner.get() }
     }
 }
 impl<'a, T, Token: TokenTrait> core::ops::DerefMut for TokenGuardMut<'a, T, Token> {
@@ -102,6 +129,7 @@ impl<'a, T, Token: TokenTrait> core::ops::DerefMut for TokenGuardMut<'a, T, Toke
     }
 }
 
+/// A Cell that shifts the management of access permissions to its inner value onto a `Token`.
 pub struct TokenCell<T: ?Sized, Token: TokenTrait> {
     token_id: Token::Identifier,
     inner: UnsafeCell<T>,
@@ -140,22 +168,34 @@ impl<T: ?Sized, Token: TokenTrait> TokenCellTrait<T, Token> for TokenCell<T, Tok
             token_id: token.identifier(),
         }
     }
-
-    fn try_borrow<'l>(
+    fn try_guard<'l>(
         &'l self,
         token: &'l Token,
-    ) -> Result<TokenGuard<'l, T, Token>, Token::ComparisonError> {
+    ) -> Result<TokenGuard<'l, T, Token>, <Token as TokenTrait>::ComparisonError> {
         token
             .compare(&self.token_id)
             .map(move |_| TokenGuard { cell: self, token })
+    }
+    fn try_borrow<'l>(&'l self, token: &'l Token) -> Result<&'l T, Token::ComparisonError> {
+        token
+            .compare(&self.token_id)
+            .map(move |_| unsafe { &*self.inner.get() })
+    }
+    fn try_guard_mut<'l>(
+        &'l self,
+        token: &'l mut Token,
+    ) -> Result<TokenGuardMut<'l, T, Token>, <Token as TokenTrait>::ComparisonError> {
+        token
+            .compare(&self.token_id)
+            .map(move |_| TokenGuardMut { cell: self, token })
     }
 
     fn try_borrow_mut<'l>(
         &'l self,
         token: &'l mut Token,
-    ) -> Result<TokenGuardMut<'l, T, Token>, Token::ComparisonError> {
+    ) -> Result<&'l mut T, Token::ComparisonError> {
         token
             .compare(&self.token_id)
-            .map(move |_| TokenGuardMut { cell: self, token })
+            .map(move |_| unsafe { &mut *self.inner.get() })
     }
 }

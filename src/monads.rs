@@ -27,14 +27,14 @@ impl<
     > TokenMap<'a, T, U, F, Cell, Token>
 {
     pub fn try_apply(self, token: &'a Token) -> Result<U, Token::ComparisonError> {
-        let borrowed = self.cell.try_borrow(token)?;
+        let borrowed = self.cell.try_guard(token)?;
         Ok((self.f)(borrowed))
     }
     pub fn apply(self, token: &'a Token) -> U
     where
         Token: TokenTrait<ComparisonError = Infallible>,
     {
-        let borrowed = self.cell.borrow(token);
+        let borrowed = self.cell.try_guard(token).unwrap();
         (self.f)(borrowed)
     }
 }
@@ -61,14 +61,14 @@ impl<
     > TokenMapMut<'a, T, U, F, Cell, Token>
 {
     pub fn try_apply(self, token: &'a mut Token) -> Result<U, Token::ComparisonError> {
-        let borrowed = self.cell.try_borrow_mut(token)?;
+        let borrowed = self.cell.try_guard_mut(token)?;
         Ok((self.f)(borrowed))
     }
     pub fn apply(self, token: &'a mut Token) -> U
     where
         Token: TokenTrait<ComparisonError = Infallible>,
     {
-        let borrowed = self.cell.borrow_mut(token);
+        let borrowed = self.cell.try_guard_mut(token).unwrap();
         (self.f)(borrowed)
     }
 }
