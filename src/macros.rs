@@ -124,11 +124,11 @@ macro_rules! unsafe_token {
 }
 }
 pub use token::token;
-#[cfg(feature = "debug")]
+#[cfg(any(feature = "debug", debug_assertions))]
 mod token {
     pub use crate::runtime_token as token;
 }
-#[cfg(not(feature = "debug"))]
+#[cfg(not(any(feature = "debug", debug_assertions)))]
 mod token {
     pub use crate::unsafe_token as token;
 }

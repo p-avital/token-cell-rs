@@ -1,6 +1,6 @@
 [package]
 name = "token-cell"
-version = "1.4.1"
+version = "1.4.2"
 edition = "2018"
 authors = ["Pierre Avital <pierre.avital@me.com>"]
 description = "A more convenient GhostCell"
@@ -14,7 +14,7 @@ categories = ["memory-management", "no-std"]
 [features]
 no_std = []
 debug = []
-default = ["debug"]
+default = []
 [dependencies]
 paste = "1.0"
 [dev-dependencies]

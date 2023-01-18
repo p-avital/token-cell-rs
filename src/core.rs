@@ -3,6 +3,25 @@ use ::core::{
     ops::{Deref, DerefMut},
 };
 
+trait MapLikely<T> {
+    type Output<U>;
+    fn map_likely<U, F: FnOnce(T) -> U>(self, f: F) -> Self::Output<U>;
+}
+#[cold]
+fn cold() {}
+impl<T, E> MapLikely<T> for Result<T, E> {
+    type Output<U> = Result<U, E>;
+    fn map_likely<U, F: FnOnce(T) -> U>(self, f: F) -> Self::Output<U> {
+        match self {
+            Ok(v) => Ok(f(v)),
+            Err(e) => {
+                cold();
+                Err(e)
+            }
+        }
+    }
+}
+
 use crate::monads::{TokenMap, TokenMapMut};
 /// A trait for tokens
 pub trait TokenTrait: Sized {
@@ -174,12 +193,12 @@ impl<T: ?Sized, Token: TokenTrait> TokenCellTrait<T, Token> for TokenCell<T, Tok
     ) -> Result<TokenGuard<'l, T, Token>, <Token as TokenTrait>::ComparisonError> {
         token
             .compare(&self.token_id)
-            .map(move |_| TokenGuard { cell: self, token })
+            .map_likely(move |_| TokenGuard { cell: self, token })
     }
     fn try_borrow<'l>(&'l self, token: &'l Token) -> Result<&'l T, Token::ComparisonError> {
         token
             .compare(&self.token_id)
-            .map(move |_| unsafe { &*self.inner.get() })
+            .map_likely(move |_| unsafe { &*self.inner.get() })
     }
     fn try_guard_mut<'l>(
         &'l self,
@@ -187,7 +206,7 @@ impl<T: ?Sized, Token: TokenTrait> TokenCellTrait<T, Token> for TokenCell<T, Tok
     ) -> Result<TokenGuardMut<'l, T, Token>, <Token as TokenTrait>::ComparisonError> {
         token
             .compare(&self.token_id)
-            .map(move |_| TokenGuardMut { cell: self, token })
+            .map_likely(move |_| TokenGuardMut { cell: self, token })
     }
 
     fn try_borrow_mut<'l>(
@@ -196,6 +215,6 @@ impl<T: ?Sized, Token: TokenTrait> TokenCellTrait<T, Token> for TokenCell<T, Tok
     ) -> Result<&'l mut T, Token::ComparisonError> {
         token
             .compare(&self.token_id)
-            .map(move |_| unsafe { &mut *self.inner.get() })
+            .map_likely(move |_| unsafe { &mut *self.inner.get() })
     }
 }
