@@ -2,6 +2,7 @@ use core::{cell::UnsafeCell, convert::Infallible};
 
 use crate::core::TokenTrait;
 
+/// The identifier for a [`GhostToken`]-based cell is its [`InvariantLifetime`]
 #[derive(Clone, Copy)]
 pub struct InvariantLifetime<'a>(core::marker::PhantomData<UnsafeCell<&'a ()>>);
 impl<'a> InvariantLifetime<'a> {
@@ -10,23 +11,90 @@ impl<'a> InvariantLifetime<'a> {
     }
 }
 
-/// WARNING: This attempt at recreating GhostCell but with traits does NOT work.
+/// A lifetime based token, inspired by `ghost_cell`.
 ///
-/// I am leaving this here because I believe there may exist a way to make this type of
-/// token work, and anyone who has ideas of how to do so is welcome to try and make a PR.
+/// Correct usage, where cells are only unlocked by providing a mutable reference to the token they were constructed with, will compile.
+/// ```rust
+/// # use token_cell::{prelude::*, ghost::GhostToken};
+/// GhostToken::with_token(|mut t1| {
+///     let c1 = TokenCell::new(1, &t1);
+///     GhostToken::with_token(|mut t2| {
+///         let c2 = TokenCell::new(1, &t2);
+///         println!("{}", *c2.borrow_mut(&mut t2));
+///         println!("{}", *c1.borrow_mut(&mut t1));
+///     })
+///     .unwrap();
+///     c1.borrow_mut(&mut t1);
+/// })
+/// .unwrap();
+/// ```
 ///
-/// To check your theory, clone this repo and use the `ghost.rs` example as a check for
-/// your attempt. If your method works, the example should have some compile error.
+/// But using the wrong token with any given cell will fail at compile time.
+/// ```compile_fail
+///  # use token_cell::{prelude::*, ghost::GhostToken};
+///  GhostToken::with_token(|mut t1| {
+///      let c1 = TokenCell::new(1, &t1);
+///      GhostToken::with_token(|mut t2| {
+///          println!("{}", *c1.borrow_mut(&mut t2));
+///      })
+///      .unwrap();
+///      c1.borrow_mut(&mut t1);
+///  })
+///  .unwrap();
+///  ```
+/// ```compile_fail
+/// # use token_cell::{prelude::*, ghost::GhostToken};
+/// GhostToken::with_token(|mut t1| {
+///     let c1 = TokenCell::new(1, &t1);
+///     GhostToken::with_token(|mut t2| {
+///         let c2 = TokenCell::new(1, &t2);
+///         println!("{}", *c2.borrow_mut(&mut t1));
+///         println!("{}", *c1.borrow_mut(&mut t1));
+///     })
+///     .unwrap();
+///     c1.borrow_mut(&mut t1);
+/// })
+/// .unwrap();
+/// ```
 pub struct GhostToken<'brand>(InvariantLifetime<'brand>);
 impl<'brand> TokenTrait for GhostToken<'brand> {
     type ConstructionError = ();
     type RunError = Infallible;
     type Identifier = InvariantLifetime<'brand>;
     type ComparisonError = Infallible;
+    type Branded<'a> = GhostToken<'a>;
     fn new() -> Result<Self, Self::ConstructionError> {
         Err(())
     }
-    fn with_token<R, F: FnOnce(Self) -> R>(f: F) -> Result<R, Self::RunError> {
+    /// ```rust
+    /// use token_cell::{ghost::*, prelude::*};
+    /// GhostToken::with_token(|mut t1| {
+    ///     let c1 = TokenCell::new(1, &t1);
+    ///     GhostToken::with_token(|mut t2| {
+    ///         let c2 = TokenCell::new(1, &t2);
+    ///         println!("{}", *c2.borrow_mut(&mut t2));
+    ///         println!("{}", *c1.borrow_mut(&mut t1));
+    ///     })
+    ///     .unwrap();
+    ///     c1.borrow_mut(&mut t1);
+    /// })
+    /// .unwrap();
+    /// ```
+    /// ```compile_fail
+    /// use token_cell::{ghost::*, prelude::*};
+    /// GhostToken::with_token(|mut t1| {
+    ///     let c1 = TokenCell::new(1, &t1);
+    ///     GhostToken::with_token(|mut t2| {
+    ///         let c2 = TokenCell::new(1, &t2);
+    ///         println!("{}", *c2.borrow_mut(&mut t2));
+    ///         println!("{}", *c1.borrow_mut(&mut t2));
+    ///     })
+    ///     .unwrap();
+    ///     c1.borrow_mut(&mut t1);
+    /// })
+    /// .unwrap();
+    /// ```
+    fn with_token<R, F: for<'a> FnOnce(Self::Branded<'a>) -> R>(f: F) -> Result<R, Self::RunError> {
         Ok(f(Self(InvariantLifetime::new())))
     }
 
