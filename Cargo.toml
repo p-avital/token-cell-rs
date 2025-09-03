@@ -1,11 +1,11 @@
 [package]
 name = "token-cell"
-version = "1.5.0"
+version = "1.6.0"
 edition = "2018"
 authors = ["Pierre Avital <pierre.avital@me.com>"]
 description = "A more convenient GhostCell"
 readme = "README.md"
-license = "EPL-2.0"
+license = "EPL-2.0 OR Apache-2.0"
 repository = "https://github.com/p-avital/token-cell-rs"
 keywords = ["aliasing", "borrowing", "ghostcell"]
 categories = ["memory-management", "no-std"]
