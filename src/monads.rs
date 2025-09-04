@@ -38,7 +38,7 @@ impl<
             Err(e) => Err((self, e)),
         }
     }
-    /// Apples the operation.
+    /// Applies the operation.
     pub fn apply(self, token: &'a Token) -> U
     where
         Token: TokenTrait<ComparisonError = Infallible>,
@@ -79,7 +79,7 @@ impl<
         let borrowed = self.cell.try_guard_mut(token)?;
         Ok((self.f)(borrowed))
     }
-    /// Apples the operation.
+    /// Applies the operation.
     pub fn apply(self, token: &'a mut Token) -> U
     where
         Token: TokenTrait<ComparisonError = Infallible>,
