@@ -1,6 +1,6 @@
 [package]
 name = "token-cell"
-version = "1.6.0"
+version = "2.0.0"
 edition = "2018"
 authors = ["Pierre Avital <pierre.avital@me.com>"]
 description = "A more convenient GhostCell"
