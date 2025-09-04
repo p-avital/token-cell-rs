@@ -190,11 +190,6 @@ pub struct TokenCell<T: ?Sized, Token: TokenTrait> {
 impl<T: ?Sized, Token: TokenTrait> TokenCell<T, Token> {
     /// While cells are typically behind immutable references,
     /// obtaining a mutable reference to one is still proof of unique access.
-    pub fn get(&mut self) -> &T {
-        self.inner.get_mut()
-    }
-    /// While cells are typically behind immutable references,
-    /// obtaining a mutable reference to one is still proof of unique access.
     pub fn get_mut(&mut self) -> &mut T {
         self.inner.get_mut()
     }
