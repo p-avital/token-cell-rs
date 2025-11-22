@@ -9,7 +9,7 @@
 //! This library provides an alternative to [`ghost-cell`](https://crates.io/crates/ghost-cell) which uses concrete types instead of lifetimes for branding.
 //!
 //! This allows a more convenient usage, where cells and tokens can be constructed independently, with the same compile-time guarantees as [`ghost-cell`](https://crates.io/crates/ghost-cell). The trade-off for this arguably more convenient usage and arguably easier to understand branding method is that tokens, while zero-sized if made correctly, must be guaranteed to be constructable only if no other instance exists.
-#![cfg_attr(not(features = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), no_std)]
 pub use paste::paste;
 #[cfg(feature = "std")]
 mod std {
@@ -33,5 +33,9 @@ pub mod ghost;
 pub mod macros;
 /// Because monads are cool.
 pub mod monads;
+/// Re-export the portable-atomic crate because it is used in the macros.
+pub mod atomics {
+    pub use portable_atomic::*;
+}
 
 runtime_token!(pub RuntimeToken);

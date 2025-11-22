@@ -17,5 +17,6 @@ debug = []
 default = ["std"]
 [dependencies]
 paste = "1.0"
+portable-atomic = "1"
 [dev-dependencies]
 ghost-cell = "0.2"
