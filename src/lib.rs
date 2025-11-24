@@ -35,7 +35,7 @@ pub mod macros;
 pub mod monads;
 /// Re-export the portable-atomic crate because it is used in the macros.
 pub mod atomics {
-    pub use portable_atomic::*;
+    pub use portable_atomic::AtomicU16;
 }
 
 runtime_token!(pub RuntimeToken);
