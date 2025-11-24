@@ -6,9 +6,8 @@ macro_rules! runtime_token {
         $vis use [<__ $id _mod__ >]::$id;
         #[allow(nonstandard_style)]
         mod [<__ $id _mod__ >] {
-            use $crate::core::TokenCell;
-            use core::{convert::Infallible, sync::atomic::AtomicU16};
-            static COUNTER: AtomicU16 = AtomicU16::new(0);
+            use core::convert::Infallible;
+            static COUNTER: $crate::atomics::AtomicU16 = $crate::atomics::AtomicU16::new(0);
             /// A small token that's also checked at runtime, ensuring that a [`TokenCell`] is never accidentally used with another instance of the same token type.
             pub struct $id(u16);
             impl $crate::core::TokenTrait for $id {
