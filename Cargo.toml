@@ -1,6 +1,6 @@
 [package]
 name = "token-cell"
-version = "2.1.0"
+version = "2.1.1"
 edition = "2018"
 authors = ["Pierre Avital <pierre.avital@me.com>"]
 description = "A more convenient GhostCell"
@@ -18,5 +18,6 @@ default = ["std"]
 [dependencies]
 paste = "1.0"
 portable-atomic = "1"
+rustversion = "<2"
 [dev-dependencies]
 ghost-cell = "0.2"

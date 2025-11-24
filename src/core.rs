@@ -166,7 +166,8 @@ impl<'a, T: ?Sized, Token: TokenTrait> TokenGuardMut<'a, T, Token> {
         self.token
     }
     /// Reborrows the token mutably.
-    pub const fn token_mut(&mut self) -> &mut Token {
+    #[rustversion::attr(since(1.83), const)]
+    pub fn token_mut(&mut self) -> &mut Token {
         self.token
     }
 }
@@ -190,7 +191,8 @@ pub struct TokenCell<T: ?Sized, Token: TokenTrait> {
 impl<T: ?Sized, Token: TokenTrait> TokenCell<T, Token> {
     /// While cells are typically behind immutable references,
     /// obtaining a mutable reference to one is still proof of unique access.
-    pub const fn get_mut(&mut self) -> &mut T {
+    #[rustversion::attr(since(1.83), const)]
+    pub fn get_mut(&mut self) -> &mut T {
         self.inner.get_mut()
     }
 }
