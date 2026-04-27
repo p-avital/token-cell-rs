@@ -13,14 +13,15 @@
 pub use paste::paste;
 #[cfg(feature = "std")]
 mod std {
-    use crate::macros::{IdMismatch, SingletonUnavailable};
+    use crate::macros::{SingletonUnavailable};
+    use crate::runtime_token_support::{IdMismatch, Identifier};
     extern crate std;
-    impl std::error::Error for IdMismatch {}
+    impl<T: Identifier> std::error::Error for IdMismatch<T> {}
     impl std::error::Error for SingletonUnavailable {}
 }
 /// The basis for using `token_cell`
 pub mod prelude {
-    pub use crate::core::{TokenCell, TokenCellTrait, TokenTrait};
+    pub use crate::core::{TokenCell, TokenCellTrait, TokenTrait, UnscopedToken};
 }
 pub use crate::macros::token;
 /// The core aspects of `token_cell`
@@ -38,4 +39,7 @@ pub mod atomics {
     pub use portable_atomic::AtomicU16;
 }
 
-runtime_token!(pub RuntimeToken);
+/// Support module for the [`runtime_token`] macro.
+pub mod runtime_token_support;
+
+runtime_token!(pub RuntimeToken: u64);

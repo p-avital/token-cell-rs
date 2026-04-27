@@ -19,11 +19,11 @@ fn fallible_try_borrow(cell: &TokenCell<i32, RuntimeToken>, token: &mut RuntimeT
 
 token_cell::unsafe_token!(Token);
 fn main() {
-    let mut t1 = Token::new().unwrap();
+    let mut t1 = Token::new();
     let c1 = TokenCell::new(0, &t1);
     infallible_borrow(&c1, &mut t1);
     infallible_try_borrow(&c1, &mut t1);
-    let mut t2 = RuntimeToken::new().unwrap();
+    let mut t2 = RuntimeToken::new();
     let c2 = TokenCell::new(1, &t2);
     fallible_try_borrow(&c2, &mut t2);
 }

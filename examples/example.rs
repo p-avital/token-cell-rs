@@ -3,10 +3,10 @@ use token_cell::prelude::*;
 token_cell::unsafe_token!(Token, pub Token2);
 
 fn main() {
-    let mut token = Token::new().unwrap();
+    let mut token = Token::new();
     let cell1 = TokenCell::new(1, &token);
     let cell2 = TokenCell::new(2, &token);
-    let mut token2 = Token2::new().unwrap();
+    let mut token2 = Token2::new();
     let mut cell3 = TokenCell::new(3, &token2);
     let _cell4 = TokenCell::new(4, &token2);
     *cell1.borrow_mut(&mut token) = 5;
