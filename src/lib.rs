@@ -36,10 +36,6 @@ pub mod ghost;
 pub mod macros;
 /// Because monads are cool.
 pub mod monads;
-/// Re-export the portable-atomic crate because it is used in the macros.
-pub mod atomics {
-    pub use portable_atomic::AtomicU16;
-}
 
 /// Support module for the [`runtime_token`] macro.
 pub mod runtime_token_support;

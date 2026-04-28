@@ -25,6 +25,9 @@ macro_rules! impl_identifier {
     (comp u64) => {
         crate::core::False
     };
+    (comp u128) => {
+        crate::core::False
+    };
     (comp $id: ty) => {
         crate::core::False
     };
@@ -43,10 +46,11 @@ macro_rules! impl_identifier {
     };
 }
 
-impl_identifier!(u8, core::sync::atomic::AtomicU8);
-impl_identifier!(u16, core::sync::atomic::AtomicU16);
-impl_identifier!(u32, core::sync::atomic::AtomicU32);
-impl_identifier!(u64, core::sync::atomic::AtomicU64);
+impl_identifier!(u8, portable_atomic::AtomicU8);
+impl_identifier!(u16, portable_atomic::AtomicU16);
+impl_identifier!(u32, portable_atomic::AtomicU32);
+impl_identifier!(u64, portable_atomic::AtomicU64);
+impl_identifier!(u128, portable_atomic::AtomicU128);
 
 /// The comparison error for runtime tokens.
 ///
