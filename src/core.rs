@@ -23,27 +23,69 @@ impl<T, E> MapLikely<T> for Result<T, E> {
 }
 
 use crate::monads::{TokenMap, TokenMapMut};
-/// A trait for tokens
-pub trait TokenTrait: Sized {
+
+/// A token that isn't intrinsically tied to a scope.
+///
+/// Most token types aren't, but some like [`GhostToken`] are.
+pub trait UnscopedToken: TokenTrait {
     /// Constructing a token may fail.
     type ConstructionError;
-    /// [`TokenTrait::with_token`] may fail, typically if construction failed.
-    ///
-    /// Some types, like [`GhostToken`](crate::ghost::GhostToken) are inconstructible with [`TokenTrait::new`], but cannot fail to run, hence the distinction.
-    type RunError;
-    /// Lets a [`TokenCell`] keep track of the token.
-    ///
-    /// In most cases, this is a ZST in release mode.
-    type Identifier;
-    /// [`core::convert::Infallible`] unless [`TokenTrait::compare`] is fallible (ie. comparison is done at runtime).
-    type ComparisonError;
-    /// Rebrands the token, this is necessary for [`GhostToken`](crate::ghost::GhostToken) to function properly
-    type Branded<'a>;
+
     /// Constructs a new Token.
     ///
     /// # Errors
     /// Some token implementations may chose to be constructible only once, or only while holding a given lock.
-    fn new() -> Result<Self, Self::ConstructionError>;
+    fn try_new() -> Result<Self, Self::ConstructionError>;
+
+    /// Constructs a new Token. This method may be used instead of [`UnscopedToken::try_new`] when .
+    fn new() -> Self
+    where
+        Self: UnscopedToken<ConstructionError = core::convert::Infallible>,
+    {
+        let Ok(this) = Self::try_new();
+        this
+    }
+}
+
+pub use sealed::{False, True};
+pub(crate) mod sealed {
+    pub trait Boolean {}
+    /// A type that represents `true`.
+    pub struct True;
+    /// A type that represents `false`.
+    pub struct False;
+    impl Boolean for True {}
+    impl Boolean for False {}
+}
+
+/// A trait for tokens
+pub trait TokenTrait: Sized {
+    /// Whether or not comparison between two distinct token could yield `eq`.
+    ///
+    /// This can be the case for tokens that can be constructed with [`UnscopedToken`] an arbitrary amount of times,
+    /// but aren't guaranteed to have unique identifiers distinguishing them:
+    /// - Instances of the types created by [`unsafe_token`](crate::unsafe_token), for example, are indistinguishable at both compile and runtime;
+    ///   accidentally using two distinct instances to gain access to a same cell could cause undefined behaviour if done simultaneously.
+    /// - Instances of the types created by [`runtime_token`](crate::runtime_token) are identified by a cyclic counter (`u16`` by default);
+    ///   while unlikely, you could create two distinct instances with a same internal id by overflowing the static counter used to construct them.
+    type ComparisonMaySpuriouslyEq: sealed::Boolean;
+
+    /// [`TokenTrait::with_token`] may fail, typically if construction failed.
+    ///
+    /// Some types, like [`GhostToken`](crate::ghost::GhostToken) are inconstructible with [`UnscopedToken`], but cannot fail to run, hence the distinction.
+    type RunError;
+
+    /// Lets a [`TokenCell`] keep track of the token.
+    ///
+    /// In most cases, this is a ZST in release mode.
+    type Identifier;
+
+    /// [`core::convert::Infallible`] unless [`TokenTrait::compare`] is fallible (ie. comparison is done at runtime).
+    type ComparisonError;
+
+    /// Rebrands the token, this is necessary for [`GhostToken`](crate::ghost::GhostToken) to function properly
+    type Branded<'a>;
+
     /// Constructs a new, lifetime-branded Token, and provides it to the closure.
     ///
     /// This is especially useful for [`GhostToken`](crate::ghost::GhostToken), which can only be constructed that way, as they use lifetimes to obtain a unique brand.
@@ -51,8 +93,10 @@ pub trait TokenTrait: Sized {
     /// # Errors
     /// If construction failed, so will this.
     fn with_token<R, F: for<'a> FnOnce(Self::Branded<'a>) -> R>(f: F) -> Result<R, Self::RunError>;
+
     /// Returns the Token's identifier, which cells may store to allow comparison.
     fn identifier(&self) -> Self::Identifier;
+
     /// Allows the cell to compare its identifier to the Token.
     ///
     /// # Errors
@@ -63,11 +107,117 @@ pub trait TokenTrait: Sized {
 /// Common ways to interract with a [`TokenCell`].
 ///
 /// Note that while many functions document fallihle behaviours, this behaviour is only reachable for tokens that perform runtime check. These are identifiable by their [`TokenTrait::ComparisonError`] type not being [`core::convert::Infallible`].
-pub trait TokenCellTrait<T: ?Sized, Token: TokenTrait>: Sync {
-    /// Constructs a new cell using `token` as its key.
-    fn new(inner: T, token: &Token) -> Self
+pub trait UnsafeTokenCellTrait<T: ?Sized, Token: TokenTrait<ComparisonMaySpuriouslyEq = True>>:
+    Sync
+{
+    /// Attempts to construct a guard which [`Deref`]s to the inner data,
+    /// but also allows recovering the `Token`.
+    ///
+    /// # Safety
+    /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
+    ///
+    /// # Errors
+    /// If the token provides runtime checking and detects that `self` was constructed with another token.
+    ///
+    /// If such an error is ever raised, it should be treated as a high priority bug in your application,
+    /// as that would indicate that the safety requirement was not met, but was detected before Undefined Behaviour
+    /// could be triggered.
+    unsafe fn try_guard<'l>(
+        &'l self,
+        token: &'l Token,
+    ) -> Result<TokenGuard<'l, T, Token>, Token::ComparisonError>;
+
+    /// Attempts to borrow the inner data.
+    ///
+    /// # Safety
+    /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
+    ///
+    /// # Errors
+    /// If the token provides runtime checking and detects that `self` was constructed with another token.
+    unsafe fn try_borrow<'l>(&'l self, token: &'l Token) -> Result<&'l T, Token::ComparisonError>;
+
+    /// Attempts to construct a guard which [`DerefMut`]s to the inner data,
+    /// but also allows recovering the `Token`.
+    ///
+    /// # Safety
+    /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
+    ///
+    /// # Errors
+    /// If the token provides runtime checking and detects that `self` was constructed with another token.
+    unsafe fn try_guard_mut<'l>(
+        &'l self,
+        token: &'l mut Token,
+    ) -> Result<TokenGuardMut<'l, T, Token>, Token::ComparisonError>;
+
+    /// Attempts to borrow the inner data mutably.
+    ///
+    /// # Safety
+    /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
+    ///
+    /// # Errors
+    /// If the token provides runtime checking and detects that `self` was constructed with another token.
+    unsafe fn try_borrow_mut<'l>(
+        &'l self,
+        token: &'l mut Token,
+    ) -> Result<&'l mut T, Token::ComparisonError>;
+
+    /// Borrows the inner data, panicking if the wrong token was used as key.
+    ///
+    /// # Safety
+    /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
+    unsafe fn borrow<'l>(&'l self, token: &'l Token) -> &'l T
     where
-        T: Sized;
+        Token::ComparisonError: core::fmt::Debug,
+    {
+        self.try_borrow(token).unwrap()
+    }
+
+    /// Borrows the inner data mutably, panicking if the wrong token was used as key.
+    ///
+    /// # Safety
+    /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
+    unsafe fn borrow_mut<'l>(&'l self, token: &'l mut Token) -> &'l mut T
+    where
+        Token::ComparisonError: core::fmt::Debug,
+    {
+        self.try_borrow_mut(token).unwrap()
+    }
+
+    /// Constructs a lazy computation that can then be applied using the token.
+    ///
+    /// # Safety
+    /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
+    unsafe fn map<'a, U, F: FnOnce(TokenGuard<'a, T, Token>) -> U>(
+        &'a self,
+        f: F,
+    ) -> TokenMap<'a, T, U, F, Self, Token, True> {
+        TokenMap {
+            cell: self,
+            f,
+            marker: core::marker::PhantomData,
+        }
+    }
+
+    /// Constructs a lazy computation that can then be applied using the token.
+    ///
+    /// # Safety
+    /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
+    unsafe fn map_mut<'a, U, F: FnOnce(TokenGuardMut<'a, T, Token>) -> U>(
+        &'a self,
+        f: F,
+    ) -> TokenMapMut<'a, T, U, F, Self, Token, True> {
+        TokenMapMut {
+            cell: self,
+            f,
+            marker: core::marker::PhantomData,
+        }
+    }
+}
+
+/// Common ways to interract with a [`TokenCell`].
+///
+/// Note that while many functions document fallihle behaviours, this behaviour is only reachable for tokens that perform runtime check. These are identifiable by their [`TokenTrait::ComparisonError`] type not being [`core::convert::Infallible`].
+pub trait TokenCellTrait<T: ?Sized, Token: TokenTrait<ComparisonMaySpuriouslyEq = False>> {
     /// Attempts to construct a guard which [`Deref`]s to the inner data,
     /// but also allows recovering the `Token`.
     ///
@@ -77,11 +227,13 @@ pub trait TokenCellTrait<T: ?Sized, Token: TokenTrait>: Sync {
         &'l self,
         token: &'l Token,
     ) -> Result<TokenGuard<'l, T, Token>, Token::ComparisonError>;
+
     /// Attempts to borrow the inner data.
     ///
     /// # Errors
     /// If the token provides runtime checking and detects that `self` was constructed with another token.
     fn try_borrow<'l>(&'l self, token: &'l Token) -> Result<&'l T, Token::ComparisonError>;
+
     /// Attempts to construct a guard which [`DerefMut`]s to the inner data,
     /// but also allows recovering the `Token`.
     ///
@@ -91,6 +243,7 @@ pub trait TokenCellTrait<T: ?Sized, Token: TokenTrait>: Sync {
         &'l self,
         token: &'l mut Token,
     ) -> Result<TokenGuardMut<'l, T, Token>, Token::ComparisonError>;
+
     /// Attempts to borrow the inner data mutably.
     ///
     /// # Errors
@@ -99,6 +252,7 @@ pub trait TokenCellTrait<T: ?Sized, Token: TokenTrait>: Sync {
         &'l self,
         token: &'l mut Token,
     ) -> Result<&'l mut T, Token::ComparisonError>;
+
     /// Borrows the inner data, panicking if the wrong token was used as key.
     fn borrow<'l>(&'l self, token: &'l Token) -> &'l T
     where
@@ -106,6 +260,7 @@ pub trait TokenCellTrait<T: ?Sized, Token: TokenTrait>: Sync {
     {
         self.try_borrow(token).unwrap()
     }
+
     /// Borrows the inner data mutably, panicking if the wrong token was used as key.
     fn borrow_mut<'l>(&'l self, token: &'l mut Token) -> &'l mut T
     where
@@ -113,22 +268,24 @@ pub trait TokenCellTrait<T: ?Sized, Token: TokenTrait>: Sync {
     {
         self.try_borrow_mut(token).unwrap()
     }
+
     /// Constructs a lazy computation that can then be applied using the token.
     fn map<'a, U, F: FnOnce(TokenGuard<'a, T, Token>) -> U>(
         &'a self,
         f: F,
-    ) -> TokenMap<'a, T, U, F, Self, Token> {
+    ) -> TokenMap<'a, T, U, F, Self, Token, False> {
         TokenMap {
             cell: self,
             f,
             marker: core::marker::PhantomData,
         }
     }
+
     /// Constructs a lazy computation that can then be applied using the token.
     fn map_mut<'a, U, F: FnOnce(TokenGuardMut<'a, T, Token>) -> U>(
         &'a self,
         f: F,
-    ) -> TokenMapMut<'a, T, U, F, Self, Token> {
+    ) -> TokenMapMut<'a, T, U, F, Self, Token, False> {
         TokenMapMut {
             cell: self,
             f,
@@ -218,16 +375,44 @@ impl<T: ?Sized, Token: TokenTrait> DerefMut for TokenCell<T, Token> {
 
 unsafe impl<T: ?Sized, Token: TokenTrait> Sync for TokenCell<T, Token> {}
 
-impl<T: ?Sized, Token: TokenTrait> TokenCellTrait<T, Token> for TokenCell<T, Token> {
-    fn new(inner: T, token: &Token) -> Self
-    where
-        T: Sized,
-    {
-        TokenCell {
-            inner: UnsafeCell::new(inner),
-            token_id: token.identifier(),
-        }
+impl<T: ?Sized, Token: TokenTrait<ComparisonMaySpuriouslyEq = True>> UnsafeTokenCellTrait<T, Token>
+    for TokenCell<T, Token>
+{
+    unsafe fn try_guard<'l>(
+        &'l self,
+        token: &'l Token,
+    ) -> Result<TokenGuard<'l, T, Token>, <Token as TokenTrait>::ComparisonError> {
+        token
+            .compare(&self.token_id)
+            .map_likely(move |_| TokenGuard { cell: self, token })
     }
+    unsafe fn try_borrow<'l>(&'l self, token: &'l Token) -> Result<&'l T, Token::ComparisonError> {
+        token
+            .compare(&self.token_id)
+            .map_likely(move |_| unsafe { &*self.inner.get() })
+    }
+    unsafe fn try_guard_mut<'l>(
+        &'l self,
+        token: &'l mut Token,
+    ) -> Result<TokenGuardMut<'l, T, Token>, <Token as TokenTrait>::ComparisonError> {
+        token
+            .compare(&self.token_id)
+            .map_likely(move |_| TokenGuardMut { cell: self, token })
+    }
+
+    unsafe fn try_borrow_mut<'l>(
+        &'l self,
+        token: &'l mut Token,
+    ) -> Result<&'l mut T, Token::ComparisonError> {
+        token
+            .compare(&self.token_id)
+            .map_likely(move |_| unsafe { &mut *self.inner.get() })
+    }
+}
+
+impl<T: ?Sized, Token: TokenTrait<ComparisonMaySpuriouslyEq = False>> TokenCellTrait<T, Token>
+    for TokenCell<T, Token>
+{
     fn try_guard<'l>(
         &'l self,
         token: &'l Token,
@@ -257,5 +442,18 @@ impl<T: ?Sized, Token: TokenTrait> TokenCellTrait<T, Token> for TokenCell<T, Tok
         token
             .compare(&self.token_id)
             .map_likely(move |_| unsafe { &mut *self.inner.get() })
+    }
+}
+
+impl<T, Token: TokenTrait> TokenCell<T, Token> {
+    //// Constructs a new [`TokenCell`] keyed by `token`.
+    ///
+    /// All calls to [`UnsafeTokenCellTrait`] or [`TokenCellTrait`]'s methods on the returned value MUST use the same instance of `token`
+    /// as passed to this constructor.
+    pub fn new(inner: T, token: &Token) -> Self {
+        TokenCell {
+            inner: UnsafeCell::new(inner),
+            token_id: token.identifier(),
+        }
     }
 }

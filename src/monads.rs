@@ -1,7 +1,7 @@
 use core::convert::Infallible;
 
 use crate::{
-    core::{TokenGuard, TokenGuardMut},
+    core::{False, TokenGuard, TokenGuardMut, True, UnsafeTokenCellTrait},
     prelude::*,
 };
 
@@ -12,21 +12,51 @@ pub struct TokenMap<
     T: ?Sized,
     U,
     F: FnOnce(TokenGuard<'a, T, Token>) -> U,
-    Cell: TokenCellTrait<T, Token> + ?Sized,
-    Token: TokenTrait + 'a,
+    Cell: ?Sized,
+    Token: TokenTrait<ComparisonMaySpuriouslyEq = ComparisonMaySpuriouslyEq> + 'a,
+    ComparisonMaySpuriouslyEq,
 > {
     pub(crate) cell: &'a Cell,
     pub(crate) f: F,
-    pub(crate) marker: core::marker::PhantomData<(&'a T, U, Token)>,
+    pub(crate) marker: core::marker::PhantomData<(&'a T, U, Token, ComparisonMaySpuriouslyEq)>,
 }
 impl<
         'a,
         T: ?Sized,
         U,
         F: FnOnce(TokenGuard<'a, T, Token>) -> U,
-        Token: TokenTrait,
+        Token: TokenTrait<ComparisonMaySpuriouslyEq = True>,
+        Cell: UnsafeTokenCellTrait<T, Token>,
+    > TokenMap<'a, T, U, F, Cell, Token, True>
+{
+    /// Attempt to apply the operation.
+    ///
+    /// # Errors
+    /// If the token comparison failed. Reaching this error is likely to be a fundamental error in your program.
+    pub fn try_apply(self, token: &'a Token) -> Result<U, (Self, Token::ComparisonError)> {
+        match unsafe { self.cell.try_guard(token) } {
+            Ok(borrowed) => Ok((self.f)(borrowed)),
+            Err(e) => Err((self, e)),
+        }
+    }
+    /// Applies the operation.
+    pub fn apply(self, token: &'a Token) -> U
+    where
+        Token: TokenTrait<ComparisonError = Infallible>,
+    {
+        let borrowed = unsafe { self.cell.try_guard(token).unwrap_unchecked() };
+        (self.f)(borrowed)
+    }
+}
+
+impl<
+        'a,
+        T: ?Sized,
+        U,
+        F: FnOnce(TokenGuard<'a, T, Token>) -> U,
+        Token: TokenTrait<ComparisonMaySpuriouslyEq = False>,
         Cell: TokenCellTrait<T, Token>,
-    > TokenMap<'a, T, U, F, Cell, Token>
+    > TokenMap<'a, T, U, F, Cell, Token, False>
 {
     /// Attempt to apply the operation.
     ///
@@ -43,7 +73,7 @@ impl<
     where
         Token: TokenTrait<ComparisonError = Infallible>,
     {
-        let borrowed = unsafe { self.cell.try_guard(token).unwrap_unchecked() };
+        let Ok(borrowed) = self.cell.try_guard(token);
         (self.f)(borrowed)
     }
 }
@@ -55,21 +85,22 @@ pub struct TokenMapMut<
     T: ?Sized,
     U,
     F: FnOnce(TokenGuardMut<'a, T, Token>) -> U,
-    Cell: TokenCellTrait<T, Token> + ?Sized,
-    Token: TokenTrait + 'a,
+    Cell: ?Sized,
+    Token: TokenTrait<ComparisonMaySpuriouslyEq = ComparisonMaySpuriouslyEq> + 'a,
+    ComparisonMaySpuriouslyEq,
 > {
     pub(crate) cell: &'a Cell,
     pub(crate) f: F,
-    pub(crate) marker: core::marker::PhantomData<(&'a T, U, Token)>,
+    pub(crate) marker: core::marker::PhantomData<(&'a T, U, Token, ComparisonMaySpuriouslyEq)>,
 }
 impl<
         'a,
         T: ?Sized,
         U,
         F: FnOnce(TokenGuardMut<'a, T, Token>) -> U,
-        Token: TokenTrait,
+        Token: TokenTrait<ComparisonMaySpuriouslyEq = False>,
         Cell: TokenCellTrait<T, Token>,
-    > TokenMapMut<'a, T, U, F, Cell, Token>
+    > TokenMapMut<'a, T, U, F, Cell, Token, False>
 {
     /// Attempt to apply the operation.
     ///
@@ -84,8 +115,33 @@ impl<
     where
         Token: TokenTrait<ComparisonError = Infallible>,
     {
-        let borrowed = unsafe { self.cell.try_guard_mut(token).unwrap_unchecked() };
+        let Ok(borrowed) = self.cell.try_guard_mut(token);
         (self.f)(borrowed)
     }
 }
-impl<T: ?Sized, Token: TokenTrait> TokenCell<T, Token> {}
+impl<
+        'a,
+        T: ?Sized,
+        U,
+        F: FnOnce(TokenGuardMut<'a, T, Token>) -> U,
+        Token: TokenTrait<ComparisonMaySpuriouslyEq = True>,
+        Cell: UnsafeTokenCellTrait<T, Token>,
+    > TokenMapMut<'a, T, U, F, Cell, Token, True>
+{
+    /// Attempt to apply the operation.
+    ///
+    /// # Errors
+    /// If the token comparison failed. Reaching this error is likely to be a fundamental error in your program.
+    pub fn try_apply(self, token: &'a mut Token) -> Result<U, Token::ComparisonError> {
+        let borrowed = unsafe { self.cell.try_guard_mut(token) }?;
+        Ok((self.f)(borrowed))
+    }
+    /// Applies the operation.
+    pub fn apply(self, token: &'a mut Token) -> U
+    where
+        Token: TokenTrait<ComparisonError = Infallible>,
+    {
+        let Ok(borrowed) = unsafe { self.cell.try_guard_mut(token) };
+        (self.f)(borrowed)
+    }
+}
