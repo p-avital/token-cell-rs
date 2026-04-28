@@ -1,11 +1,11 @@
 /// Produces tokens whose only identifier is their type, but is built such that only one instance of it can exist at any given time.
 ///
 /// Looping on [`TokenTrait::new`](crate::core::TokenTrait::new) with a singleton token to access a [`TokenCell`](crate::core::TokenCell) is equivalent to using a spin-lock.
-/// 
+///
 /// Note that you're almost always better off placing an [`unsafe_token`] inside a `Mutex` instead if you expect contention on the token.
 #[macro_export]
 macro_rules! singleton_token {
-($vis: vis $id: ident) => {
+($(#[$meta: meta])* $vis: vis $id: ident) => {
     $crate::paste! {
         $vis use [<__ $id _mod__ >]::$id;
         #[allow(nonstandard_style)]
@@ -13,9 +13,8 @@ macro_rules! singleton_token {
             use core::{convert::Infallible, sync::atomic::AtomicBool};
             use $crate::SingletonUnavailable;
             static AVAILABLE: AtomicBool = AtomicBool::new(true);
-            /// A ZST tokens whose only identifier is their type, but is built such that only one instance of it can exist at any given time.
-            ///
-            /// Looping on [`TokenTrait::new`](token_cell::core::TokenTrait::new) with this type to access a [`TokenCell`](token_cell::core::TokenCell) is equivalent to using a spin-lock.
+
+            $(#[$meta])*
             pub struct $id(());
             impl $crate::core::UnscopedToken for $id {
                 type ConstructionError = SingletonUnavailable;
@@ -33,6 +32,7 @@ macro_rules! singleton_token {
                 }
             }
             impl $crate::core::TokenTrait for $id {
+                type ComparisonMaySpuriouslyEq = $crate::core::False;
                 type RunError = SingletonUnavailable;
                 type Identifier = ();
                 type ComparisonError = Infallible;
@@ -54,8 +54,8 @@ macro_rules! singleton_token {
         }
     }
 };
-($($vis: vis $id: ident),*) => {
-    $($crate::singleton_token!($vis $id);)*
+($($(#[$meta: meta])* $vis: vis $id: ident),*) => {
+    $($crate::singleton_token!($(#[$meta])* $vis $id);)*
 }
 }
 
@@ -66,18 +66,15 @@ macro_rules! singleton_token {
 /// For example, if you have multiple instances of a tree that uses a single mutex to lock all of its `Arc`-ed nodes through a token built with [`unsafe_token`](crate::unsafe_token), one's token could unlock another's node without causing any errors.
 #[macro_export]
 macro_rules! unsafe_token {
-($vis: vis $id: ident) => {
+($(#[$meta: meta])* $vis: vis $id: ident) => {
     $crate::paste! {
         $vis use [<__ $id _mod__ >]::$id;
         #[allow(nonstandard_style)]
         mod [<__ $id _mod__ >] {
             use core::convert::Infallible;
             use $crate::core::UnscopedToken;
-            /// A ZST token whose only identifier is its type.
-            ///
-            /// While unlikely, a potential misuse is constructing multiple instances of the same type and using one to access a cell constructed by another instance.
-            ///
-            /// For example, if you have multiple instances of a tree that uses a single mutex to lock all of its [`Arc`](alloc::sync::Arc)-ed nodes through a token built with this type.
+
+            $(#[$meta])*
             pub struct $id(());
             impl UnscopedToken for $id {
                 type ConstructionError = Infallible;
@@ -86,6 +83,7 @@ macro_rules! unsafe_token {
                 }
             }
             impl $crate::core::TokenTrait for $id {
+                type ComparisonMaySpuriouslyEq = $crate::core::True;
                 type RunError = Infallible;
                 type Identifier = ();
                 type ComparisonError = Infallible;
@@ -103,8 +101,8 @@ macro_rules! unsafe_token {
         }
     }
 };
-($($vis: vis $id: ident),*) => {
-    $($crate::unsafe_token!($vis $id);)*
+($($(#[$meta: meta])* $vis: vis $id: ident),*) => {
+    $($crate::unsafe_token!($(#[$meta])* $vis $id);)*
 }
 }
 pub use token::token;

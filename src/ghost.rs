@@ -58,11 +58,12 @@ impl<'a> InvariantLifetime<'a> {
 /// ```
 pub struct GhostToken<'brand>(InvariantLifetime<'brand>);
 impl<'brand> TokenTrait for GhostToken<'brand> {
+    type ComparisonMaySpuriouslyEq = crate::core::False;
     type RunError = Infallible;
     type Identifier = InvariantLifetime<'brand>;
     type ComparisonError = Infallible;
     type Branded<'a> = GhostToken<'a>;
-    
+
     /// ```rust
     /// use token_cell::{ghost::*, prelude::*};
     /// GhostToken::with_token(|mut t1| {

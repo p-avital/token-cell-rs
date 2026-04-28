@@ -13,7 +13,7 @@
 pub use paste::paste;
 #[cfg(feature = "std")]
 mod std {
-    use crate::macros::{SingletonUnavailable};
+    use crate::macros::SingletonUnavailable;
     use crate::runtime_token_support::{IdMismatch, Identifier};
     extern crate std;
     impl<T: Identifier> std::error::Error for IdMismatch<T> {}
@@ -21,7 +21,9 @@ mod std {
 }
 /// The basis for using `token_cell`
 pub mod prelude {
-    pub use crate::core::{TokenCell, TokenCellTrait, TokenTrait, UnscopedToken};
+    pub use crate::core::{
+        TokenCell, TokenCellTrait, TokenTrait, UnsafeTokenCellTrait, UnscopedToken,
+    };
 }
 pub use crate::macros::token;
 /// The core aspects of `token_cell`
@@ -42,4 +44,13 @@ pub mod atomics {
 /// Support module for the [`runtime_token`] macro.
 pub mod runtime_token_support;
 
-runtime_token!(pub RuntimeToken: u64);
+runtime_token!(
+    /// The default runtime-checked token type.
+    ///
+    /// Because this token type is checked at runtime, it can make sense to have a global token type for your whole application.
+    ///
+    /// And because this runtime token is backed by a `u64`, it would take you 60 years continuously instantiating them at 10GHz
+    /// (which is unfeasible with existing hardware) before an overflow may cause multiple tokens to share the same runtime identifier;
+    /// so you can safely assume that this token type will never let you access a cell that you shouldn't be accessing.
+    pub RuntimeToken: u64
+);

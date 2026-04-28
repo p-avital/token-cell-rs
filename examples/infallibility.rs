@@ -6,11 +6,11 @@ use token_cell::{prelude::*, RuntimeToken};
 
 #[no_mangle]
 fn infallible_borrow(cell: &TokenCell<i32, Token>, token: &mut Token) {
-    *cell.borrow_mut(token) = 1;
+    unsafe { *cell.borrow_mut(token) = 1 };
 }
 #[no_mangle]
 fn infallible_try_borrow(cell: &TokenCell<i32, Token>, token: &mut Token) {
-    *cell.try_borrow_mut(token).unwrap() = 1;
+    *unsafe { cell.try_borrow_mut(token) }.unwrap() = 1;
 }
 #[no_mangle]
 fn fallible_try_borrow(cell: &TokenCell<i32, RuntimeToken>, token: &mut RuntimeToken) {
