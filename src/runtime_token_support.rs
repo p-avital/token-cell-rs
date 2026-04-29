@@ -104,6 +104,7 @@ macro_rules! runtime_token {
                 static COUNTER: <$ty as Identifier>::AtomicType = <<$ty as Identifier>::AtomicType as RollingCounter>::DEFAULT;
 
                 $(#[$meta])*
+                #[derive(::core::fmt::Debug)]
                 pub struct $id($ty);
 
                 impl UnscopedToken for $id {

@@ -450,9 +450,9 @@ impl<T, Token: TokenTrait> TokenCell<T, Token> {
     ///
     /// All calls to [`UnsafeTokenCellTrait`] or [`TokenCellTrait`]'s methods on the returned value MUST use the same instance of `token`
     /// as passed to this constructor.
-    pub fn new(inner: T, token: &Token) -> Self {
+    pub fn new(value: T, token: &Token) -> Self {
         TokenCell {
-            inner: UnsafeCell::new(inner),
+            inner: UnsafeCell::new(value),
             token_id: token.identifier(),
         }
     }

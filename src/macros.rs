@@ -15,6 +15,7 @@ macro_rules! singleton_token {
             static AVAILABLE: AtomicBool = AtomicBool::new(true);
 
             $(#[$meta])*
+            #[derive(::core::fmt::Debug)]
             pub struct $id(());
             impl $crate::core::UnscopedToken for $id {
                 type ConstructionError = SingletonUnavailable;
@@ -75,6 +76,7 @@ macro_rules! unsafe_token {
             use $crate::core::UnscopedToken;
 
             $(#[$meta])*
+            #[derive(::core::fmt::Debug)]
             pub struct $id(());
             impl UnscopedToken for $id {
                 type ConstructionError = Infallible;
