@@ -210,7 +210,56 @@ With `TokenCell`, as long as you don't use the wrong token with the wrong cell, 
 
 You can even do this in multiple steps: start with a `runtime_token` to make double check that you're actually respecting that invariant, and once you're very sure, switch to `unsafe_token` to get disable those checks and run like the wind!
 
+# `TokenCell`'s exact safety contract
 
+If you go through this crate documentation of unsafe function, you'll find the following safety contract:
+```
+# Contract 1
+`token` must refer to the exact same instance of `Token` as that which was used to call `Self::new`.
+```
+
+But the more precise contract is actually:
+```
+# Contract 2
+Only a single `token` instance of `Token` may be used to interact with `self` at any given point; however you may use distinct instances to interact with `self`, provided they are never used concurrently.
+```
+
+Because respecting Contract 1 implies that Contract 2 is respected, and because Contract 1 is much easier to track and understand, it's strongly advised to treat it as the safety contract, even though it is technically stricter than required.
+
+Note that if `token-cell`'s implementation is ever changed in a way that would make Contract 2 insufficient as a safety condition, this will be considered a breaking change and will lead to a major version bump. There is however no plan to ever do such a thing.
+
+`TokenCellTrait` is implemented for cells built with tokens that verify Contract 1 (be it at runtime with sufficiently big `runtime_token`, or compile time with `GhostToken` or `singleton_token`); while cells built with token that may fail to verify that contract implement `UnsafeTokenCellTrait` to keep you wary.
+
+Here are examples to clarify:
+```rust
+token_cell::unsafe_token!(pub Token);
+let mut token1 = Token::new();
+let cell = TokenCell::new(1i8, &token1);
+// SAFETY: Contract 1 is upheld.
+unsafe { *cell.borrow_mut(&mut token1) = 2 };
+
+let mut token2 = Token::new();
+// SAFETY: Contract 1 is breached, but Contract 2 is upheld: behaviour is still perfectly defined.
+unsafe { *cell.borrow_mut(&mut token2) = 3 };
+
+
+// SAFETY: Contract 2 is still upheld, as the mutable borrow created with `token2` was already dropped.
+unsafe { *cell.borrow_mut(&mut token1) = 4 };
+
+// UNSAFE! Contract 2 is breached, Undefined Behaviour may occur, but the borrow checker will not spot this :(
+unsafe {
+    let borrow1: &mut i8 = cell.borrow_mut(&mut token1);
+    let borrow2: &i8 = cell.borrow(&mut token2); // OH NO! We now have aliased references to the contents of `cell`, one of them mutable!
+
+    *borrow1 = -1;
+
+    if *borrow2 >= 0 {
+        println!("`cell`'s latest value before our immutable borrow was 4, and our immutable borrow means it should still be 4, so we should take this branch!")
+    } else {
+        println!("But we've just set the memory at that address to a negative value, so we should take this branch instead!")
+    }
+}
+```
 
 
 
