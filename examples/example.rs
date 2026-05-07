@@ -1,3 +1,5 @@
+#![allow(clippy::print_stdout)]
+
 use token_cell::prelude::*;
 
 token_cell::unsafe_token!(

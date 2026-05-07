@@ -165,22 +165,26 @@ pub trait UnsafeTokenCellTrait<T: ?Sized, Token: TokenTrait<ComparisonMaySpuriou
     ///
     /// # Safety
     /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
+    #[allow(clippy::expect_used)] // documented
     unsafe fn borrow<'l>(&'l self, token: &'l Token) -> &'l T
     where
         Token::ComparisonError: core::fmt::Debug,
     {
-        self.try_borrow(token).unwrap()
+        self.try_borrow(token)
+            .expect("attempted to borrow with the wrong key")
     }
 
     /// Borrows the inner data mutably, panicking if the wrong token was used as key.
     ///
     /// # Safety
     /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
+    #[allow(clippy::expect_used)] // documented
     unsafe fn borrow_mut<'l>(&'l self, token: &'l mut Token) -> &'l mut T
     where
         Token::ComparisonError: core::fmt::Debug,
     {
-        self.try_borrow_mut(token).unwrap()
+        self.try_borrow_mut(token)
+            .expect("attempted to borrow with the wrong key")
     }
 
     /// Constructs a lazy computation that can then be applied using the token.
@@ -254,19 +258,23 @@ pub trait TokenCellTrait<T: ?Sized, Token: TokenTrait<ComparisonMaySpuriouslyEq 
     ) -> Result<&'l mut T, Token::ComparisonError>;
 
     /// Borrows the inner data, panicking if the wrong token was used as key.
+    #[allow(clippy::expect_used)] // documented
     fn borrow<'l>(&'l self, token: &'l Token) -> &'l T
     where
         Token::ComparisonError: core::fmt::Debug,
     {
-        self.try_borrow(token).unwrap()
+        self.try_borrow(token)
+            .expect("attempted to borrow with the wrong key")
     }
 
     /// Borrows the inner data mutably, panicking if the wrong token was used as key.
+    #[allow(clippy::expect_used)] // documented
     fn borrow_mut<'l>(&'l self, token: &'l mut Token) -> &'l mut T
     where
         Token::ComparisonError: core::fmt::Debug,
     {
-        self.try_borrow_mut(token).unwrap()
+        self.try_borrow_mut(token)
+            .expect("attempted to borrow with the wrong key")
     }
 
     /// Constructs a lazy computation that can then be applied using the token.

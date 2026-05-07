@@ -11,6 +11,8 @@
 //! This allows a more convenient usage, where cells and tokens can be constructed independently, with the same compile-time guarantees as [`ghost-cell`](https://crates.io/crates/ghost-cell). The trade-off for this arguably more convenient usage and arguably easier to understand branding method is that tokens, while zero-sized if made correctly, must be guaranteed to be constructable only if no other instance exists.
 #![cfg_attr(not(feature = "std"), no_std)]
 pub use paste::paste;
+
+#[rustversion::before(1.81)]
 #[cfg(feature = "std")]
 mod std {
     use crate::macros::SingletonUnavailable;
@@ -19,6 +21,14 @@ mod std {
     impl<T: Identifier> std::error::Error for IdMismatch<T> {}
     impl std::error::Error for SingletonUnavailable {}
 }
+#[rustversion::since(1.81)]
+mod std {
+    use crate::macros::SingletonUnavailable;
+    use crate::runtime_token_support::{IdMismatch, Identifier};
+    impl<T: Identifier> core::error::Error for IdMismatch<T> {}
+    impl core::error::Error for SingletonUnavailable {}
+}
+
 /// The basis for using `token_cell`
 pub mod prelude {
     pub use crate::core::{

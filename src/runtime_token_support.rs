@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use core::fmt::Debug;
 
 /// A trait for types that can serve as unique identifiers for runtime tokens.
 ///

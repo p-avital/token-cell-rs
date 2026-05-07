@@ -23,3 +23,15 @@ rustversion = "<2"
 
 [dev-dependencies]
 ghost-cell = "0.2"
+
+[lints.clippy]
+indexing_slicing = "warn"
+arithmetic_side_effects = "warn"
+missing_panics_doc = "warn"
+panic = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+dbg_macro = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+std_instead_of_core = "warn"
