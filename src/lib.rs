@@ -12,6 +12,20 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 pub use paste::paste;
 
+#[rustversion::since(1.90)]
+macro_rules! infallible_ok {
+    ($expr: expr) => {{
+        let Ok(r) = $expr;
+        r
+    }};
+}
+#[rustversion::before(1.90)]
+macro_rules! infallible_ok {
+    ($expr: expr) => {{
+        unsafe { $expr.unwrap_unchecked() }
+    }};
+}
+
 #[rustversion::before(1.81)]
 #[cfg(feature = "std")]
 mod std {

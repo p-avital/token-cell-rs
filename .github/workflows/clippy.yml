@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rust: [1.72, stable]
+        rust: ["1.72", stable]
         features: [none, all, default]
     name: Clippy - Rust ${{ matrix.rust }} - features ${{ matrix.features }}
     steps:
@@ -25,6 +25,10 @@ jobs:
           override: true
           components: clippy
           profile: minimal
+      
+      - name: Enable 1.72.0 lockfile
+        if: ${{ matrix.rust == "1.72" }}
+        run: mv Cargo-1_72_0.lock Cargo.lock
 
       - name: Run clippy
         run: |

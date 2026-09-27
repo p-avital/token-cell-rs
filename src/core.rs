@@ -42,8 +42,7 @@ pub trait UnscopedToken: TokenTrait {
     where
         Self: UnscopedToken<ConstructionError = core::convert::Infallible>,
     {
-        let Ok(this) = Self::try_new();
-        this
+        infallible_ok!(Self::try_new())
     }
 }
 
@@ -188,10 +187,7 @@ pub trait UnsafeTokenCellTrait<T: ?Sized, Token: TokenTrait<ComparisonMaySpuriou
     }
 
     /// Constructs a lazy computation that can then be applied using the token.
-    ///
-    /// # Safety
-    /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
-    unsafe fn map<'a, U, F: FnOnce(TokenGuard<'a, T, Token>) -> U>(
+    fn map<'a, U, F: FnOnce(TokenGuard<'a, T, Token>) -> U>(
         &'a self,
         f: F,
     ) -> TokenMap<'a, T, U, F, Self, Token, True> {
@@ -203,10 +199,7 @@ pub trait UnsafeTokenCellTrait<T: ?Sized, Token: TokenTrait<ComparisonMaySpuriou
     }
 
     /// Constructs a lazy computation that can then be applied using the token.
-    ///
-    /// # Safety
-    /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
-    unsafe fn map_mut<'a, U, F: FnOnce(TokenGuardMut<'a, T, Token>) -> U>(
+    fn map_mut<'a, U, F: FnOnce(TokenGuardMut<'a, T, Token>) -> U>(
         &'a self,
         f: F,
     ) -> TokenMapMut<'a, T, U, F, Self, Token, True> {
