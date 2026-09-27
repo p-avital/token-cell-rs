@@ -73,7 +73,7 @@ impl<
     where
         Token: TokenTrait<ComparisonError = Infallible>,
     {
-        let Ok(borrowed) = self.cell.try_guard(token);
+        let borrowed = infallible_ok!(self.cell.try_guard(token));
         (self.f)(borrowed)
     }
 }
@@ -115,7 +115,7 @@ impl<
     where
         Token: TokenTrait<ComparisonError = Infallible>,
     {
-        let Ok(borrowed) = self.cell.try_guard_mut(token);
+        let borrowed = infallible_ok!(self.cell.try_guard_mut(token));
         (self.f)(borrowed)
     }
 }
@@ -132,16 +132,22 @@ impl<
     ///
     /// # Errors
     /// If the token comparison failed. Reaching this error is likely to be a fundamental error in your program.
-    pub fn try_apply(self, token: &'a mut Token) -> Result<U, Token::ComparisonError> {
+    ///
+    /// # Safety
+    /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
+    pub unsafe fn try_apply(self, token: &'a mut Token) -> Result<U, Token::ComparisonError> {
         let borrowed = unsafe { self.cell.try_guard_mut(token) }?;
         Ok((self.f)(borrowed))
     }
     /// Applies the operation.
-    pub fn apply(self, token: &'a mut Token) -> U
+    ///
+    /// # Safety
+    /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
+    pub unsafe fn apply(self, token: &'a mut Token) -> U
     where
         Token: TokenTrait<ComparisonError = Infallible>,
     {
-        let Ok(borrowed) = unsafe { self.cell.try_guard_mut(token) };
+        let borrowed = unsafe { self.cell.try_guard_mut(token).unwrap_unchecked() };
         (self.f)(borrowed)
     }
 }

@@ -42,8 +42,7 @@ pub trait UnscopedToken: TokenTrait {
     where
         Self: UnscopedToken<ConstructionError = core::convert::Infallible>,
     {
-        let Ok(this) = Self::try_new();
-        this
+        infallible_ok!(Self::try_new())
     }
 }
 
@@ -165,29 +164,30 @@ pub trait UnsafeTokenCellTrait<T: ?Sized, Token: TokenTrait<ComparisonMaySpuriou
     ///
     /// # Safety
     /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
+    #[allow(clippy::expect_used)] // documented
     unsafe fn borrow<'l>(&'l self, token: &'l Token) -> &'l T
     where
         Token::ComparisonError: core::fmt::Debug,
     {
-        self.try_borrow(token).unwrap()
+        self.try_borrow(token)
+            .expect("attempted to borrow with the wrong key")
     }
 
     /// Borrows the inner data mutably, panicking if the wrong token was used as key.
     ///
     /// # Safety
     /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
+    #[allow(clippy::expect_used)] // documented
     unsafe fn borrow_mut<'l>(&'l self, token: &'l mut Token) -> &'l mut T
     where
         Token::ComparisonError: core::fmt::Debug,
     {
-        self.try_borrow_mut(token).unwrap()
+        self.try_borrow_mut(token)
+            .expect("attempted to borrow with the wrong key")
     }
 
     /// Constructs a lazy computation that can then be applied using the token.
-    ///
-    /// # Safety
-    /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
-    unsafe fn map<'a, U, F: FnOnce(TokenGuard<'a, T, Token>) -> U>(
+    fn map<'a, U, F: FnOnce(TokenGuard<'a, T, Token>) -> U>(
         &'a self,
         f: F,
     ) -> TokenMap<'a, T, U, F, Self, Token, True> {
@@ -199,10 +199,7 @@ pub trait UnsafeTokenCellTrait<T: ?Sized, Token: TokenTrait<ComparisonMaySpuriou
     }
 
     /// Constructs a lazy computation that can then be applied using the token.
-    ///
-    /// # Safety
-    /// `token` must refer to the _exact same_ instance of `Token` as that which was used to call [`Self::new`].
-    unsafe fn map_mut<'a, U, F: FnOnce(TokenGuardMut<'a, T, Token>) -> U>(
+    fn map_mut<'a, U, F: FnOnce(TokenGuardMut<'a, T, Token>) -> U>(
         &'a self,
         f: F,
     ) -> TokenMapMut<'a, T, U, F, Self, Token, True> {
@@ -254,19 +251,23 @@ pub trait TokenCellTrait<T: ?Sized, Token: TokenTrait<ComparisonMaySpuriouslyEq 
     ) -> Result<&'l mut T, Token::ComparisonError>;
 
     /// Borrows the inner data, panicking if the wrong token was used as key.
+    #[allow(clippy::expect_used)] // documented
     fn borrow<'l>(&'l self, token: &'l Token) -> &'l T
     where
         Token::ComparisonError: core::fmt::Debug,
     {
-        self.try_borrow(token).unwrap()
+        self.try_borrow(token)
+            .expect("attempted to borrow with the wrong key")
     }
 
     /// Borrows the inner data mutably, panicking if the wrong token was used as key.
+    #[allow(clippy::expect_used)] // documented
     fn borrow_mut<'l>(&'l self, token: &'l mut Token) -> &'l mut T
     where
         Token::ComparisonError: core::fmt::Debug,
     {
-        self.try_borrow_mut(token).unwrap()
+        self.try_borrow_mut(token)
+            .expect("attempted to borrow with the wrong key")
     }
 
     /// Constructs a lazy computation that can then be applied using the token.

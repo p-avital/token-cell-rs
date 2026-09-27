@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use core::fmt::Debug;
 
 /// A trait for types that can serve as unique identifiers for runtime tokens.
 ///
@@ -36,6 +36,10 @@ macro_rules! impl_identifier {
             type AtomicType = $atom;
             type ComparisonMaySpuriouslyEq = impl_identifier!(comp $id);
         }
+        // This is an old false-positive:
+        // - `DEFAULT` is a `const` because `const fn` in traits is not stable yet.
+        // - That const is copied into a `static` that allows interior mutability, and only ever used that way
+        #[rustversion::attr(before(1.78), allow(clippy::declare_interior_mutable_const))]
         impl RollingCounter for $atom {
             const DEFAULT: Self = Self::new(0);
             type NonAtomic = $id;

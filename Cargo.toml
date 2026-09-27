@@ -1,6 +1,6 @@
 [package]
 name = "token-cell"
-version = "3.0.0"
+version = "4.0.0"
 edition = "2018"
 authors = ["Pierre Avital <pierre.avital@me.com>"]
 description = "A more convenient GhostCell"
@@ -9,6 +9,7 @@ license = "EPL-2.0 OR Apache-2.0"
 repository = "https://github.com/p-avital/token-cell-rs"
 keywords = ["aliasing", "borrowing", "ghostcell"]
 categories = ["memory-management", "no-std"]
+rust-version = "1.72"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
@@ -23,3 +24,15 @@ rustversion = "<2"
 
 [dev-dependencies]
 ghost-cell = "0.2"
+
+[lints.clippy]
+indexing_slicing = "warn"
+arithmetic_side_effects = "warn"
+missing_panics_doc = "warn"
+panic = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+dbg_macro = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+std_instead_of_core = "warn"

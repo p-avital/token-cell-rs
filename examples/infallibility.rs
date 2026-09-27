@@ -1,6 +1,7 @@
 //! By generating the ASM for this example,
 //! we find that in release mode, `infallible_borrow` and `infallible_try_borrow` are equivalent.
 //! However, in debug mode, the ASM instructions for panicking are still present.
+#![allow(clippy::unwrap_used)]
 
 use token_cell::{prelude::*, RuntimeToken};
 

@@ -1,3 +1,5 @@
+#![allow(clippy::print_stdout)]
+
 use token_cell::prelude::*;
 
 token_cell::unsafe_token!(
@@ -16,13 +18,13 @@ fn main() {
     let _cell4 = TokenCell::new(4, &token2);
     unsafe { *cell1.borrow_mut(&mut token1) = 5 };
     unsafe { *cell2.borrow_mut(&mut token1) = 6 };
-    let map = unsafe { cell2.map_mut(|mut v| *v = 9) };
+    let map = cell2.map_mut(|mut v| *v = 9);
     let cell3_ref = &cell3;
     unsafe { *cell3_ref.borrow_mut(&mut token2) = 7 };
     let cell3_mutref = &mut cell3;
     *cell3_mutref.get_mut() = 8;
     let borrow = unsafe { cell3.borrow(&token2) };
-    map.apply(&mut token1);
+    unsafe { map.apply(&mut token1) };
     println!("{}", *borrow);
 
     let mut token3 = Token::new();

@@ -1,0 +1,44 @@
+name: Clippy
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  clippy:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: ["1.72", stable]
+        features: [none, all, default]
+    name: Clippy - Rust ${{ matrix.rust }} - features ${{ matrix.features }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          override: true
+          components: clippy
+          profile: minimal
+      
+      - name: Enable 1.72.0 lockfile
+        if: ${{ matrix.rust == "1.72" }}
+        run: mv Cargo-1_72_0.lock Cargo.lock
+
+      - name: Run clippy
+        run: |
+          echo "Rust version: ${{ matrix.rust }}"
+          echo "Features: ${{ matrix.features }}"
+          if [ "${{ matrix.features }}" = "none" ]; then
+            cargo clippy --no-default-features --all-targets -- -D warnings
+          elif [ "${{ matrix.features }}" = "all" ]; then
+            cargo clippy --all-features --all-targets -- -D warnings
+          else
+            # default features
+            cargo clippy --all-targets -- -D warnings
+          fi

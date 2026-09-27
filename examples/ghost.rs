@@ -1,3 +1,5 @@
+#![allow(clippy::print_stdout)]
+
 use ghost_cell::{GhostCell as GC, GhostToken as GT};
 use token_cell::{ghost::*, prelude::*};
 
